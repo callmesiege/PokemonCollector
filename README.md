@@ -9,10 +9,14 @@ your collection on your phone.
 - **Sets view** – every English set, grouped by series, newest first, with a percent-complete bar.
   Filter to in-progress / complete / not-started / new sets.
 - **Set detail** – card grid with real card images, `+ / −` quantity per card, owned/missing/duplicates/wishlist filters, in-set search.
-- **Card sheet** – larger image, rarity, type, illustrator, market price, variants, and links to the Pokédex entry.
+- **Variant tracking** – separate counts for normal, reverse holo, holo, 1st edition and W promo printings of each card.
+  The tile `+ / −` adds the card's standard printing; open the card to set each variant individually.
+- **Card sheet** – larger image, per-variant counts, rarity, type, illustrator, market price, and links to the Pokédex entry.
 - **Pokédex view** – by region (Kanto → Paldea), shows which Pokémon you have cards of and how many.
   Tap a Pokémon to see every card ever printed of it, with yours highlighted.
 - **Search** – find any card by name across all sets and add it straight to your collection.
+- **Identify a card** – type the number printed on a physical card (`045/198`, `SWSH045`, or `25` + name)
+  and the app shows every set that card could belong to, with pictures, so you can match the set symbol and add it.
 - **Wishlist** – star cards you're hunting for.
 - **Stats** – distinct cards, total cards, species covered, sets complete, estimated value, duplicates for trading, rarity breakdown.
 - **Backup** – export/import JSON, export CSV.

@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { renderSets, renderSet } from './views-sets.js';
 import { renderDex, renderRegion, renderPokemon } from './views-dex.js';
 import { renderSearch, renderMore } from './views-more.js';
+import { renderLookup } from './views-lookup.js';
 
 // ---------- Shared state & helpers ----------
 export const state = {
@@ -88,25 +89,78 @@ export function setOwned(setId, set) {
   return n;
 }
 
-export async function setQty(card, setId, qty) {
-  qty = Math.max(0, Math.min(999, qty | 0));
-  const id = card.id;
-  if (qty === 0) {
+// ---- Variants ----
+// Each collection entry stores per-variant counts; `qty` is always their sum.
+export const VARIANTS = [
+  ['normal', 'Normal'], ['reverse', 'Reverse holo'], ['holo', 'Holo'], ['firstEdition', '1st edition'], ['wPromo', 'W promo'],
+];
+export const variantLabel = k => (VARIANTS.find(v => v[0] === k) || [k, k])[1];
+export const variantShort = k => ({ normal: 'N', reverse: 'R', holo: 'H', firstEdition: '1st', wPromo: 'W' })[k] || k;
+export const sumVariants = v => Object.values(v || {}).reduce((n, x) => n + (x | 0), 0);
+
+// Which variants exist for a card: from the entry (filled in by enrich), the full card record, or a sensible default.
+export function availableVariants(card, entry) {
+  const src = (entry && entry.avail && entry.avail.length) ? entry.avail
+    : card && card.variants ? Object.keys(card.variants).filter(k => card.variants[k])
+    : null;
+  if (src && src.length) return src;
+  return ['normal', 'reverse', 'holo'];
+}
+export function defaultVariant(card, entry) {
+  const avail = availableVariants(card, entry);
+  return avail.includes('normal') ? 'normal' : avail[0];
+}
+
+function makeEntry(card, setId) {
+  return {
+    id: card.id, setId, localId: card.localId, name: card.name, image: card.image || null,
+    qty: 0, variants: {}, avail: card.variants ? Object.keys(card.variants).filter(k => card.variants[k]) : [],
+    dexIds: card.dexId || [], rarity: card.rarity || null, category: card.category || null,
+    price: null, addedAt: Date.now(),
+  };
+}
+
+async function commitEntry(entry, card) {
+  entry.qty = sumVariants(entry.variants);
+  const id = entry.id;
+  if (entry.qty === 0) {
     state.collection.delete(id);
     await db.delete('collection', id);
   } else {
-    const prev = state.collection.get(id);
-    const entry = prev ? { ...prev, qty } : {
-      id, setId, localId: card.localId, name: card.name, image: card.image || null,
-      qty, dexIds: card.dexId || [], rarity: card.rarity || null, category: card.category || null,
-      price: null, addedAt: Date.now(),
-    };
     state.collection.set(id, entry);
     await db.put('collection', entry);
-    if (!prev || !prev.dexIds || !prev.dexIds.length || prev.price == null) enrichEntry(id);
+    if (!entry.dexIds || !entry.dexIds.length || entry.price == null || !entry.avail || !entry.avail.length) enrichEntry(id);
   }
-  document.dispatchEvent(new CustomEvent('collection-changed', { detail: { id, qty } }));
-  return qty;
+  document.dispatchEvent(new CustomEvent('collection-changed', { detail: { id, qty: entry.qty } }));
+  return entry.qty;
+}
+
+// Adjust one variant's count by delta.
+export async function changeVariant(card, setId, variant, delta) {
+  const entry = state.collection.get(card.id) || makeEntry(card, setId);
+  entry.variants = { ...(entry.variants || {}) };
+  entry.variants[variant] = Math.max(0, Math.min(999, (entry.variants[variant] | 0) + delta));
+  if (!entry.variants[variant]) delete entry.variants[variant];
+  return commitEntry(entry, card);
+}
+
+// Adjust the total by delta, using the card's default variant (what the +/- on a tile does).
+export async function changeQty(card, setId, delta) {
+  const entry = state.collection.get(card.id);
+  let variant = defaultVariant(card, entry);
+  if (delta < 0 && entry) {
+    // Remove from the default variant if we have one, otherwise from whichever variant has the most.
+    if (!entry.variants[variant]) variant = Object.entries(entry.variants).sort((a, b) => b[1] - a[1])[0]?.[0] || variant;
+  }
+  return changeVariant(card, setId, variant, delta);
+}
+
+// Set the total directly (used by import). Keeps existing variant split where possible.
+export async function setQty(card, setId, qty) {
+  const entry = state.collection.get(card.id) || makeEntry(card, setId);
+  const cur = sumVariants(entry.variants);
+  if (qty !== cur) { const v = defaultVariant(card, entry); entry.variants = { ...entry.variants, [v]: Math.max(0, (entry.variants[v] | 0) + (qty - cur)) }; if (!entry.variants[v]) delete entry.variants[v]; }
+  return commitEntry(entry, card);
 }
 
 // Fetch full card detail in the background to fill dexIds/rarity/price (needed for the Pokédex view).
@@ -118,6 +172,7 @@ export async function enrichEntry(id) {
     const e = state.collection.get(id); if (!e) return;
     e.dexIds = full.dexId || []; e.rarity = full.rarity || e.rarity; e.category = full.category || e.category;
     e.image = full.image || e.image; e.price = marketPrice(full);
+    if (full.variants) e.avail = Object.keys(full.variants).filter(k => full.variants[k]);
     await db.put('collection', e);
     document.dispatchEvent(new CustomEvent('collection-changed', { detail: { id, qty: e.qty, enriched: true } }));
   } catch (e) { /* offline; will retry next time it's touched */ } finally { enriching.delete(id); }
@@ -205,6 +260,7 @@ const routes = [
   [/^#\/dex\/([^/]+)$/, m => renderRegion(m[1])],
   [/^#\/pokemon\/(\d+)$/, m => renderPokemon(Number(m[1]))],
   [/^#\/search(?:\/(.*))?$/, m => renderSearch(m[1] ? decodeURIComponent(m[1]) : '')],
+  [/^#\/lookup$/, () => renderLookup()],
   [/^#\/more$/, () => renderMore()],
 ];
 const scrollPos = new Map();
@@ -213,7 +269,7 @@ async function route() {
   if (currentHash) scrollPos.set(currentHash, window.scrollY);
   const hash = location.hash || '#/sets';
   currentHash = hash;
-  const tab = hash.startsWith('#/set') ? 'sets' : hash.startsWith('#/dex') || hash.startsWith('#/pokemon') ? 'dex' : hash.startsWith('#/search') ? 'search' : 'more';
+  const tab = hash.startsWith('#/set') ? 'sets' : hash.startsWith('#/dex') || hash.startsWith('#/pokemon') ? 'dex' : hash.startsWith('#/search') || hash.startsWith('#/lookup') ? 'search' : 'more';
   document.querySelectorAll('.tabbar a').forEach(a => a.classList.toggle('active', a.dataset.tab === tab));
   const view = $('#view'); view.innerHTML = '';
   for (const [re, fn] of routes) {
@@ -235,7 +291,10 @@ async function boot() {
   const saved = await db.getMeta('settings');
   if (saved) Object.assign(state.settings, saved);
   applyTheme();
-  (await db.getAll('collection')).forEach(e => state.collection.set(e.id, e));
+  (await db.getAll('collection')).forEach(e => {
+    if (!e.variants) { e.variants = e.qty > 0 ? { normal: e.qty } : {}; e.avail = e.avail || []; db.put('collection', e); }
+    state.collection.set(e.id, e);
+  });
   (await db.getAll('wishlist')).forEach(e => state.wishlist.set(e.id, e));
   state.knownSetIds = await db.getMeta('knownSetIds', []);
   state.newSetIds = await db.getMeta('newSetIds', []);

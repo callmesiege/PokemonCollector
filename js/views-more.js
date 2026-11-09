@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { db } from './db.js';
-import { state, el, $, esc, toast, setTitle, saveSettings, checkForNewSets, visibleSets, setTotal, setOwned, pct, fmtPct, isPocketSet } from './app.js';
+import { state, el, $, esc, toast, setTitle, saveSettings, checkForNewSets, visibleSets, setTotal, setOwned, pct, fmtPct, isPocketSet, VARIANTS, variantLabel } from './app.js';
 import { cardTile, updateTile, serieOf } from './views-sets.js';
 
 // ---------- Search ----------
@@ -10,7 +10,7 @@ export async function renderSearch(initial = '') {
   const input = el('input', { class: 'search', type: 'search', placeholder: 'Card name, e.g. Charizard…', value: initial, autofocus: true });
   const hint = el('div', { class: 'muted small', style: 'margin:0 4px 10px' }, 'Searches every English card ever printed. Tap + to add one to your collection.');
   const grid = el('div', { class: 'card-grid' });
-  view.append(input, hint, grid);
+  view.append(modeChips('search'), input, hint, grid);
   let timer, seq = 0;
   async function run() {
     const q = input.value.trim(); const my = ++seq;
@@ -36,6 +36,12 @@ export async function renderSearch(initial = '') {
   obs.observe($('#view'), { childList: true });
 }
 
+export function modeChips(active) {
+  return el('div', { class: 'chips' },
+    el('a', { class: 'chip' + (active === 'search' ? ' active' : ''), href: '#/search' }, 'Search by name'),
+    el('a', { class: 'chip' + (active === 'lookup' ? ' active' : ''), href: '#/lookup' }, 'Identify a card 🔎'));
+}
+
 // ---------- More: stats, wishlist, backup, settings ----------
 export async function renderMore() {
   const view = $('#view'); setTitle('More');
@@ -59,6 +65,11 @@ export async function renderMore() {
   const rar = {}; entries.forEach(e => { const k = e.rarity || 'Unknown'; rar[k] = (rar[k] || 0) + e.qty; });
   const rarRows = Object.entries(rar).sort((a, b) => b[1] - a[1]).slice(0, 8);
   if (rarRows.length) view.append(el('div', { class: 'section-title' }, 'By rarity'), el('div', { class: 'card-box list' }, ...rarRows.map(([k, v]) => el('div', { class: 'item' }, el('div', { class: 'l' }, k), el('div', {}, v)))));
+
+  // Variant breakdown
+  const vcount = {}; entries.forEach(e => Object.entries(e.variants || {}).forEach(([k, n]) => { vcount[k] = (vcount[k] || 0) + n; }));
+  const vrows = VARIANTS.filter(([k]) => vcount[k]).map(([k]) => [variantLabel(k), vcount[k]]);
+  if (vrows.length) view.append(el('div', { class: 'section-title' }, 'By variant'), el('div', { class: 'card-box list' }, ...vrows.map(([k, v]) => el('div', { class: 'item' }, el('div', { class: 'l' }, k), el('div', {}, v)))));
 
   // Wishlist
   const wish = [...state.wishlist.values()];
@@ -131,13 +142,13 @@ function download(name, text, type) {
   const a = el('a', { href: URL.createObjectURL(new Blob([text], { type })), download: name }); document.body.append(a); a.click(); a.remove();
 }
 function exportJSON() {
-  const data = { app: 'pokecollector', version: 1, exportedAt: new Date().toISOString(), collection: [...state.collection.values()], wishlist: [...state.wishlist.values()], settings: state.settings };
+  const data = { app: 'pokecollector', version: 2, exportedAt: new Date().toISOString(), collection: [...state.collection.values()], wishlist: [...state.wishlist.values()], settings: state.settings };
   download(`pokemon-collection-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 1), 'application/json');
   toast('Exported');
 }
 function exportCSV() {
-  const rows = [['card_id', 'set', 'number', 'name', 'qty', 'rarity', 'dex_ids', 'market_price_usd']];
-  for (const e of state.collection.values()) rows.push([e.id, e.setId, e.localId, e.name, e.qty, e.rarity || '', (e.dexIds || []).join(' '), e.price && e.price.unit === 'USD' ? e.price.value : '']);
+  const rows = [['card_id', 'set', 'number', 'name', 'qty', ...VARIANTS.map(([k]) => 'qty_' + k), 'rarity', 'dex_ids', 'market_price_usd']];
+  for (const e of state.collection.values()) rows.push([e.id, e.setId, e.localId, e.name, e.qty, ...VARIANTS.map(([k]) => (e.variants || {})[k] || 0), e.rarity || '', (e.dexIds || []).join(' '), e.price && e.price.unit === 'USD' ? e.price.value : '']);
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
   download(`pokemon-collection-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv');
 }
@@ -147,7 +158,10 @@ function importButton() {
     try {
       const data = JSON.parse(await f.text());
       if (!data || !Array.isArray(data.collection)) throw new Error('Not a collection export');
-      const coll = data.collection.filter(x => x && x.id && typeof x.qty === 'number');
+      const coll = data.collection.filter(x => x && x.id && typeof x.qty === 'number').map(x => {
+        if (!x.variants || typeof x.variants !== 'object') x.variants = x.qty > 0 ? { normal: x.qty } : {};
+        x.qty = Object.values(x.variants).reduce((n, v) => n + (v | 0), 0); return x;
+      }).filter(x => x.qty > 0);
       await db.putMany('collection', coll); coll.forEach(x => state.collection.set(x.id, x));
       if (Array.isArray(data.wishlist)) { await db.putMany('wishlist', data.wishlist); data.wishlist.forEach(x => state.wishlist.set(x.id, x)); }
       toast(`Imported ${coll.length} cards`); renderMore();

@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { state, el, $, esc, toast, openModal, closeModal, setTitle, pct, fmtPct, visibleSets, setTotal, setOwned, setQty, toggleWish, marketPrice, clearNewFlag, checkForNewSets } from './app.js';
+import { state, el, $, esc, toast, openModal, closeModal, setTitle, pct, fmtPct, visibleSets, setTotal, setOwned, changeQty, changeVariant, toggleWish, marketPrice, clearNewFlag, checkForNewSets, VARIANTS, variantLabel, variantShort, availableVariants } from './app.js';
 
 // ---------- Sets list ----------
 export async function renderSets() {
@@ -152,7 +152,7 @@ export function cardTile(c, setId, set, { showSet = false } = {}) {
       el('button', { 'aria-label': 'Add one', onclick: () => change(1) }, '+')),
     el('div', { class: 'tap', onclick: () => openCardSheet(c, setId, set) }));
   tile._card = c; tile._setId = setId;
-  function change(d) { const e = state.collection.get(c.id); setQty(c, setId, (e ? e.qty : 0) + d); }
+  function change(d) { changeQty(c, setId, d); }
   updateTile(tile);
   return tile;
 }
@@ -161,37 +161,59 @@ export function updateTile(tile) {
   tile.classList.toggle('missing', qty === 0);
   tile.classList.toggle('wish', state.wishlist.has(c.id));
   const q = tile.querySelector('.q'); q.textContent = qty ? `×${qty}` : '0'; q.className = 'q ' + (qty ? 'has' : 'zero');
+  // Variant breakdown (only when more than one kind is owned, or a non-normal one is).
+  let vb = tile.querySelector('.vb');
+  const keys = e ? Object.keys(e.variants || {}).filter(k => e.variants[k] > 0) : [];
+  const show = keys.length > 1 || (keys.length === 1 && keys[0] !== 'normal');
+  if (show) { if (!vb) { vb = el('div', { class: 'vb' }); tile.querySelector('.info').append(vb); } vb.textContent = keys.map(k => `${variantShort(k)}${e.variants[k]}`).join(' · '); }
+  else if (vb) vb.remove();
 }
 
 // ---------- Card detail sheet ----------
 export async function openCardSheet(c, setId, set) {
   const big = el('img', { class: 'bigimg', src: api.imageUrl(c.image, state.settings.imageQuality) || '', alt: c.name });
   big.onerror = () => { if (big.src.includes('/high.webp')) big.src = api.imageUrl(c.image, 'low'); else big.replaceWith(el('div', { class: 'bigimg', style: 'display:grid;place-items:center;color:var(--fg-3)' }, 'No image yet')); };
-  const qtyEl = el('div', { class: 'q' });
+  const variantsBox = el('div', { class: 'variants' });
+  const totalEl = el('div', { class: 'muted small', style: 'text-align:center;margin-top:4px' });
   const wishBtn = el('button', { class: 'btn small', onclick: async () => { await toggleWish(c, setId); wishBtn.textContent = state.wishlist.has(c.id) ? '★ Wishlisted' : '☆ Wishlist'; } }, state.wishlist.has(c.id) ? '★ Wishlisted' : '☆ Wishlist');
   const details = el('dl', { class: 'kv' });
   const box = el('div', {},
     big,
     el('h2', {}, c.name),
     el('div', { class: 'muted small' }, `${set ? set.name : setId.toUpperCase()} · #${c.localId}${set && set.cardCount && set.cardCount.official ? '/' + set.cardCount.official : ''}`),
-    el('div', { class: 'qty-big' },
-      el('button', { onclick: () => change(-1) }, '−'), qtyEl, el('button', { onclick: () => change(1) }, '+')),
-    el('div', { class: 'row', style: 'justify-content:center;gap:8px' }, wishBtn,
+    variantsBox, totalEl,
+    el('div', { class: 'row', style: 'justify-content:center;gap:8px;margin-top:10px' }, wishBtn,
       el('a', { class: 'btn small', href: `#/set/${encodeURIComponent(setId)}`, onclick: closeModal }, 'Open set')),
     details);
-  function refreshQty() { const e = state.collection.get(c.id); qtyEl.textContent = e ? e.qty : 0; }
-  function change(d) { const e = state.collection.get(c.id); setQty(c, setId, (e ? e.qty : 0) + d).then(refreshQty); }
-  refreshQty();
+  let full = null;
+  function drawVariants() {
+    const e = state.collection.get(c.id);
+    const avail = availableVariants(full || c, e);
+    const owned = e ? Object.keys(e.variants || {}).filter(k => e.variants[k] > 0) : [];
+    const keys = VARIANTS.map(v => v[0]).filter(k => avail.includes(k) || owned.includes(k));
+    variantsBox.innerHTML = '';
+    for (const k of keys) {
+      const n = e && e.variants ? (e.variants[k] | 0) : 0;
+      variantsBox.append(el('div', { class: 'variant-row' },
+        el('div', { class: 'grow' }, el('div', {}, variantLabel(k)), !avail.includes(k) && el('div', { class: 'small muted' }, 'not listed for this card')),
+        el('button', { class: 'vbtn', 'aria-label': `Remove one ${variantLabel(k)}`, onclick: () => changeVariant(c, setId, k, -1).then(drawVariants) }, '−'),
+        el('div', { class: 'vq' + (n ? ' has' : '') }, n),
+        el('button', { class: 'vbtn', 'aria-label': `Add one ${variantLabel(k)}`, onclick: () => changeVariant(c, setId, k, 1).then(drawVariants) }, '+')));
+    }
+    const total = e ? e.qty : 0;
+    totalEl.textContent = total ? `${total} total` : 'Not in your collection yet';
+  }
+  drawVariants();
   openModal(box);
   try {
-    const full = await api.getCard(c.id);
+    full = await api.getCard(c.id);
+    drawVariants();
     const price = marketPrice(full);
     const rows = [
       ['Rarity', full.rarity], ['Type', full.category === 'Pokemon' ? (full.types || []).join(', ') : full.category],
       ['Stage', full.stage], ['HP', full.hp], ['Illustrator', full.illustrator],
       ['Pokédex #', (full.dexId || []).join(', ') || null],
       ['Market price', price ? `${price.unit === 'USD' ? '$' : '€'}${price.value.toFixed(2)}` : null],
-      ['Variants', full.variants ? Object.entries(full.variants).filter(([, v]) => v).map(([k]) => k).join(', ') : null],
     ].filter(([, v]) => v !== null && v !== undefined && v !== '');
     details.innerHTML = '';
     rows.forEach(([k, v]) => details.append(el('dt', {}, k), el('dd', {}, String(v))));

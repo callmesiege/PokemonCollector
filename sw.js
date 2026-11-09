@@ -1,12 +1,12 @@
 // Service worker: offline app shell + bounded image cache.
 // Bump VERSION whenever app files change so clients pick up the new shell.
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.1.0';
 const SHELL = `shell-${VERSION}`;
 const IMG = 'img-v1';
 const MAX_IMAGES = 400; // ~20 KB each → roughly 8 MB ceiling for cached card thumbnails/logos
 
 const SHELL_FILES = ['./', './index.html', './css/styles.css', './js/app.js', './js/api.js', './js/db.js',
-  './js/views-sets.js', './js/views-dex.js', './js/views-more.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
+  './js/views-sets.js', './js/views-dex.js', './js/views-more.js', './js/views-lookup.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
