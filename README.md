@@ -43,9 +43,14 @@ your collection on your phone.
 
 ## Deploying (GitHub Pages)
 
-The included workflow (`.github/workflows/deploy.yml`) publishes the repo to GitHub Pages on every push
-to `main`. The first run enables Pages automatically; if it fails with a permissions error, go to
-**Settings → Pages** and set **Source: GitHub Actions**, then re-run the workflow.
+GitHub Pages is free for public repositories. Two ways to publish:
+
+1. **Deploy from a branch (no workflow needed).** Settings → Pages → Source: *Deploy from a branch*,
+   pick the branch and `/ (root)`. GitHub serves the files directly. Every push republishes.
+2. **GitHub Actions.** Settings → Pages → Source: *GitHub Actions*. The included workflow
+   (`.github/workflows/deploy.yml`) then publishes on every push and stamps the service-worker
+   version with the commit SHA. If a run fails before any job starts, push a new commit rather than
+   re-running the old run.
 
 ## Running locally
 
