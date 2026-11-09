@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Pokémon Card Collector</title>
+  <meta name="description" content="Track your Pokémon TCG collection by set and by Pokédex.">
+  <meta name="theme-color" content="#0f1220">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://api.tcgdex.net">
+  <link rel="preconnect" href="https://assets.tcgdex.net">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn back hidden" id="backBtn" aria-label="Back">‹</button>
+    <h1 id="title">Sets</h1>
+    <div class="topbar-actions" id="topActions"></div>
+  </header>
+
+  <div id="banner" class="banner hidden" role="status"></div>
+
+  <main id="view" class="view" tabindex="-1"></main>
+
+  <nav class="tabbar" aria-label="Main">
+    <a href="#/sets" data-tab="sets"><span class="tab-ico">▦</span>Sets</a>
+    <a href="#/dex" data-tab="dex"><span class="tab-ico">◉</span>Pokédex</a>
+    <a href="#/search" data-tab="search"><span class="tab-ico">⌕</span>Search</a>
+    <a href="#/more" data-tab="more"><span class="tab-ico">≡</span>More</a>
+  </nav>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <div id="modal" class="modal hidden" aria-modal="true" role="dialog"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
