@@ -45,8 +45,9 @@ your collection on your phone.
 
 GitHub Pages is free for public repositories. Two ways to publish:
 
-1. **Deploy from a branch (no workflow needed).** Settings → Pages → Source: *Deploy from a branch*,
-   pick the branch and `/ (root)`. GitHub serves the files directly. Every push republishes.
+1. **Deploy from a branch (no workflow needed, and how this repo is set up).** Settings → Pages →
+   Source: *Deploy from a branch*, pick the branch and `/ (root)`. GitHub serves the files directly and
+   republishes on every push; the "pages build and deployment" run in the Actions tab shows progress.
 2. **GitHub Actions.** Settings → Pages → Source: *GitHub Actions*. The included workflow
    (`.github/workflows/deploy.yml`) then publishes on every push and stamps the service-worker
    version with the commit SHA. If a run fails before any job starts, push a new commit rather than
