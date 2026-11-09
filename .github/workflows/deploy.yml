@@ -1,8 +1,8 @@
 name: Deploy to GitHub Pages
 
+# Manual only. The simplest way to publish is Settings → Pages → "Deploy from a branch",
+# which needs no workflow. Run this by hand if you prefer the GitHub Actions source instead.
 on:
-  push:
-    branches: [main, master, ccr-5d184551-91c9vh]
   workflow_dispatch:
 
 permissions:
