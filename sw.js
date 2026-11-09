@@ -1,9 +1,10 @@
-// Service worker: offline app shell + bounded image cache.
+// Service worker: offline app shell.
 // Bump VERSION whenever app files change so clients pick up the new shell.
-const VERSION = 'v1.1.0';
+// Card images are NOT cached here on purpose: the image CDN serves them with a one-year
+// immutable cache header, so the browser's own HTTP cache handles them efficiently. (It also
+// sends a duplicated CORS header, which makes a CORS-mode fetch from a worker fail.)
+const VERSION = 'v1.2.0';
 const SHELL = `shell-${VERSION}`;
-const IMG = 'img-v1';
-const MAX_IMAGES = 400; // ~20 KB each → roughly 8 MB ceiling for cached card thumbnails/logos
 
 const SHELL_FILES = ['./', './index.html', './css/styles.css', './js/app.js', './js/api.js', './js/db.js',
   './js/views-sets.js', './js/views-dex.js', './js/views-more.js', './js/views-lookup.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
@@ -12,15 +13,15 @@ self.addEventListener('install', e => {
   e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('shell-') && k !== SHELL).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => (k.startsWith('shell-') && k !== SHELL) || k.startsWith('img-')).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
   if (url.origin === location.origin) { e.respondWith(shellFirst(e.request)); return; }
-  if (url.hostname === 'assets.tcgdex.net' || url.hostname === 'raw.githubusercontent.com') { e.respondWith(imageCache(e.request)); return; }
-  // API JSON is cached in IndexedDB by the app; let it go straight to the network.
+  // Everything else (card images, API JSON) goes straight to the network. JSON is cached in
+  // IndexedDB by the app; images are cached by the browser's HTTP cache.
 });
 
 // App shell: cache, then refresh in the background so updates land on the next open.
@@ -31,24 +32,6 @@ async function shellFirst(req) {
   if (cached) { network.catch(() => {}); return cached; }
   const res = await network;
   return res || (await cache.match('./index.html')) || new Response('Offline', { status: 503 });
-}
-
-// Images: cache-first with a simple FIFO cap so storage stays small.
-async function imageCache(req) {
-  const cache = await caches.open(IMG);
-  const hit = await cache.match(req);
-  if (hit) return hit;
-  try {
-    const res = await fetch(req, { mode: 'cors' });
-    if (res.ok || res.type === 'opaque') { cache.put(req, res.clone()); trim(cache); }
-    return res;
-  } catch { return new Response('', { status: 504 }); }
-}
-let trimming = false;
-async function trim(cache) {
-  if (trimming) return; trimming = true;
-  try { const keys = await cache.keys(); if (keys.length > MAX_IMAGES) await Promise.all(keys.slice(0, keys.length - MAX_IMAGES).map(k => cache.delete(k))); }
-  finally { trimming = false; }
 }
 
 // Periodic background sync (Chrome on Android, installed PWAs only): poke the sets endpoint and tell open clients.

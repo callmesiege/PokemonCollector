@@ -106,7 +106,7 @@ export async function renderMore() {
   const usage = await storageUsage();
   view.append(el('div', { class: 'section-title' }, 'Storage'),
     el('div', { class: 'card-box list' },
-      el('div', { class: 'item' }, el('div', { class: 'l' }, 'Space used on this device', el('div', { class: 'd' }, usage)), el('button', { class: 'btn small', onclick: clearCaches }, 'Clear image & set cache')),
+      el('div', { class: 'item' }, el('div', { class: 'l' }, 'Space used on this device', el('div', { class: 'd' }, usage + ' · card images live in the browser cache and are cleaned up automatically')), el('button', { class: 'btn small', onclick: clearCaches }, 'Clear set & card cache')),
       el('div', { class: 'item' }, el('div', { class: 'l' }, 'Delete entire collection', el('div', { class: 'd' }, 'Cannot be undone. Export first!')), el('button', { class: 'btn small danger', onclick: wipe }, 'Delete'))),
     el('div', { class: 'muted small', style: 'margin:14px 4px' }, 'Card data & images: TCGdex.net · Pokédex names & sprites: PokéAPI. Not affiliated with Nintendo or The Pokémon Company.'));
 
@@ -126,7 +126,6 @@ async function storageUsage() {
   return 'unknown';
 }
 async function clearCaches() {
-  const keys = await caches.keys(); await Promise.all(keys.filter(k => k.includes('img') || k.includes('api')).map(k => caches.delete(k)));
   await db.clear('sets');
   const all = await db.getAll('cache'); await Promise.all(all.filter(r => r.key.startsWith('card:') || r.key.startsWith('dex:')).map(r => db.delete('cache', r.key)));
   toast('Cache cleared'); renderMore();

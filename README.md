@@ -23,7 +23,7 @@ your collection on your phone.
 - **Auto-updates for new sets** – checks the card database on open / when returning to the app (default every 12 h,
   configurable), flags new sets with a **NEW** badge, shows a banner and (optionally) a notification.
   Recently released sets are re-fetched daily so card images fill in as they are published.
-- **Offline** – the app shell, your collection, and sets you've viewed all work offline.
+- **Offline** – the app shell, your collection, and the card lists of sets you've viewed work offline (images need a connection unless the browser still has them cached).
 - **Light / dark** theme, follows your system by default.
 
 ## Install on Android
@@ -37,8 +37,8 @@ your collection on your phone.
 
 - App itself: under 100 KB.
 - Set data is fetched on demand and cached (~25 KB per set you open).
-- Card thumbnails are ~20 KB WebP images, cached with a cap of 400 images (≈ 8 MB max).
-  Clear the cache any time from **More → Storage**.
+- Card thumbnails are ~20 KB WebP images held in the browser's ordinary HTTP cache, which the
+  browser trims on its own. Set and card data can be cleared any time from **More → Storage**.
 - Your collection is stored in the browser's IndexedDB. Export a backup from **More → Backup**.
 
 ## Deploying (GitHub Pages)
